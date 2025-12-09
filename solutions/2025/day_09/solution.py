@@ -3,114 +3,122 @@
 # puzzle prompt: https://adventofcode.com/2025/day/9
 
 from ...base import StrSplitSolution, answer
+from typing import Set, Tuple, List, Dict
+import itertools
 
 
 class Solution(StrSplitSolution):
+    """Day 9 solution (refactored for clarity).
+
+    The input is a list of points as `"x,y"`. Part 1 finds the largest
+    axis-aligned rectangle area determined by any two input points (inclusive
+    coordinates). Part 2 reconstructs a coarse grid around the points,
+    computes a filled region from a start point, and finds the largest
+    rectangle (aligned to the coarse grid) that is fully inside the filled
+    region.
+    """
+
     _year = 2025
     _day = 9
 
-    def fill_area(self, area: set[tuple[int, int]], start: tuple[int, int]) -> set[tuple[int, int]]:
-        filled = area.copy()
+    def flood_fill(self, blocked: Set[Tuple[int, int]], start: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        """Return the union of blocked cells and the connected region reachable
+        from `start` (4-directional). The result is a set containing the
+        blocked cells and any cells reached from `start` that were not
+        originally blocked.
+        """
+        filled = set(blocked)
         stack = [start]
         while stack:
             x, y = stack.pop()
-            if (x, y) not in filled:
-                filled.add((x, y))
-                stack.append((x+1, y))
-                stack.append((x-1, y))
-                stack.append((x, y+1))
-                stack.append((x, y-1))
+            if (x, y) in filled:
+                continue
+            filled.add((x, y))
+            stack.append((x + 1, y))
+            stack.append((x - 1, y))
+            stack.append((x, y + 1))
+            stack.append((x, y - 1))
         return filled
 
     @answer(4761736832)
     def part_1(self) -> int:
-        pts = [tuple(map(int, line.split(","))) for line in self.input]
-        max_retangle_area = 0
-        for i in range(len(pts)):
-            for j in range(i + 1, len(pts)):
-                x1, y1 = pts[i]
-                x2, y2 = pts[j]
-                length = abs(x2 - x1) + 1
-                width = abs(y2 - y1) + 1
-                area = length * width
-                if area > max_retangle_area:
-                    max_retangle_area = area
-        return max_retangle_area
+        """Compute the largest axis-aligned rectangle area (inclusive) from any
+        pair of input points.
+        """
+        points: List[Tuple[int, int]] = [tuple(map(int, line.split(","))) for line in self.input]
+        max_area = 0
+        for (x1, y1), (x2, y2) in itertools.combinations(points, 2):
+            length = abs(x2 - x1) + 1
+            width = abs(y2 - y1) + 1
+            max_area = max(max_area, length * width)
+        return max_area
 
     @answer(1452422268)
     # @wrong_answer(92348)
     def part_2(self) -> int:
-        pts = [tuple(map(int, line.split(","))) for line in self.input]
-        ori_x = [p[0] for p in pts]
-        ori_y = [p[1] for p in pts]
-        ori_x = list(set(ori_x))
-        ori_y = list(set(ori_y))
-        x = []
-        y = []
-        for v in ori_x:
-            x.append(v)
-            x.append(v + 1)
-            x.append(v - 1)
-        for v in ori_y:
-            y.append(v)
-            y.append(v + 1)
-            y.append(v - 1)
-        x = list(set(x))
-        y = list(set(y))
-        x.sort()
-        y.sort()
-        xmap = {}
-        ymap = {}
-        c_pts = []
-        for p in pts:
-            c_pts.append((x.index(p[0]), y.index(p[1])))
-            xmap[x.index(p[0])] = p[0]
-            ymap[y.index(p[1])] = p[1]
+        """Rebuild a small integer grid around input points (including
+        neighbors), mark the rectangles along polygon edges as blocked, flood
+        fill from a start cell, and choose the largest rectangle (by real
+        coordinate area) whose index-aligned cells are fully within the
+        filled region.
+        """
+        points: List[Tuple[int, int]] = [tuple(map(int, line.split(","))) for line in self.input]
 
-        area = set()
-        for i in range(len(c_pts)):
-            ni = (i + 1) % len(c_pts)
-            x1, y1 = c_pts[i]
-            x2, y2 = c_pts[ni]
-            for xi in range(min(x1, x2), max(x1, x2)+1):
-                for yi in range(min(y1, y2), max(y1, y2)+1):
-                    area.add((xi, yi))
+        def expand_coords(values: Set[int]) -> List[int]:
+            expanded = set()
+            for v in values:
+                expanded.update((v - 1, v, v + 1))
+            return sorted(expanded)
 
-        startx, starty = [c_pts[0][0]+1, c_pts[0][1]+1]
+        xs = expand_coords({x for x, _ in points})
+        ys = expand_coords({y for _, y in points})
+
+        x_index: Dict[int, int] = {v: i for i, v in enumerate(xs)}
+        y_index: Dict[int, int] = {v: i for i, v in enumerate(ys)}
+
+        # coarse grid coordinates of input points
+        coarse_points = [(x_index[x], y_index[y]) for x, y in points]
+
+        # blocked cells are rectangles between consecutive polygon points
+        blocked: Set[Tuple[int, int]] = set()
+        n = len(coarse_points)
+        for i in range(n):
+            x1, y1 = coarse_points[i]
+            x2, y2 = coarse_points[(i + 1) % n]
+            for xi in range(min(x1, x2), max(x1, x2) + 1):
+                for yi in range(min(y1, y2), max(y1, y2) + 1):
+                    blocked.add((xi, yi))
+
+        # choose a start inside the region; keep original behaviour for real input
+        start = (coarse_points[0][0] + 1, coarse_points[0][1] + 1)
         if not self.use_test_data:
-            #observe from input
-            startx, starty = 579, 378
-        
-        area_fill = self.fill_area(area, (startx, starty))
+            # observed starting point for the real input
+            start = (579, 378)
 
-        max_rectangles = []
-        for i in range(len(c_pts)):
-            for j in range(i + 1, len(c_pts)):
-                x1, y1 = c_pts[i]
-                x2, y2 = c_pts[j]
-                mapx1, mapy1 = xmap[x1], ymap[y1]
-                mapx2, mapy2 = xmap[x2], ymap[y2]
-                length = abs(mapx2 - mapx1) + 1
-                width = abs(mapy2 - mapy1) + 1
-                area = length * width
-                max_rectangles.append((area, x1, y1, x2, y2,mapx1, mapy1, mapx2, mapy2))
+        filled = self.flood_fill(blocked, start)
 
-        max_rectangles.sort()
-        for area, x1, y1, x2, y2,mapx1, mapy1, mapx2, mapy2 in reversed(max_rectangles):
-            can_fill = True
-            for xi in range(min(x1, x2), max(x1, x2)+1):
-                for yi in range(min(y1, y2), max(y1, y2)+1):
-                    if (xi, yi) not in area_fill:
-                        can_fill = False
+        # consider all pairs of coarse points as candidate rectangle corners
+        candidates = []
+        for (i1, j1), (i2, j2) in itertools.combinations(coarse_points, 2):
+            mapx1, mapy1 = xs[i1], ys[j1]
+            mapx2, mapy2 = xs[i2], ys[j2]
+            real_area = (abs(mapx2 - mapx1) + 1) * (abs(mapy2 - mapy1) + 1)
+            candidates.append((real_area, i1, j1, i2, j2))
+
+        # sort descending by real_area so we can return first valid largest
+        candidates.sort(reverse=True)
+
+        for real_area, i1, j1, i2, j2 in candidates:
+            ok = True
+            for xi in range(min(i1, i2), max(i1, i2) + 1):
+                for yi in range(min(j1, j2), max(j1, j2) + 1):
+                    if (xi, yi) not in filled:
+                        ok = False
                         break
-                if not can_fill:
+                if not ok:
                     break
-            if can_fill:
-                return area
+            if ok:
+                return real_area
+
         return -1
 
-        
-
-    # @answer((1234, 4567))
-    # def solve(self) -> tuple[int, int]:
-    #     pass
