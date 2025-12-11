@@ -9,7 +9,7 @@ class Solution(StrSplitSolution):
     _year = 2025
     _day = 10
 
-    def parseInput(self, input) -> (goals, buttonsSets, P2goals):
+    def parseInput(self, input) -> tuple[list[str], list[list[list[int]]], list[list[int]]]:
         goals = []
         buttonsSets = []
         P2goals = []
@@ -22,12 +22,12 @@ class Solution(StrSplitSolution):
 
     def solveButtons(self, goal, buttonsSets):
         start = goal.replace('#','.')
-        q = [(0, start)]
+        q = [(0, start, set())]
         cache = {}
         cache[start] = 0
         while q:
-            (step, current) = heapq.heappop(q)
-            for buttons in buttonsSets:
+            (step, current, seen) = heapq.heappop(q)
+            for i, buttons in enumerate(buttonsSets):
                 next = current
                 for button in buttons:
                     next = next[:button] + ('#' if next[button] == '.' else '.') + next[button + 1:]
@@ -36,7 +36,9 @@ class Solution(StrSplitSolution):
                 if next in cache:
                     continue
                 cache[next] = step + 1
-                heapq.heappush(q, (step + 1 , next))
+                nextSeen = seen.copy()
+                nextSeen.add(i)
+                heapq.heappush(q, (step + 1 , next, nextSeen))
         return -1
 
     def solveButtonsP2(self, goal, buttonsSet, current, index = 0, step = 0, currentMin = 99999):
@@ -74,6 +76,7 @@ class Solution(StrSplitSolution):
 
     # @answer(1234)
     def part_2(self) -> int:
+        return 0
         (goals, buttonsSets, P2goals) = self.parseInput(self.input)
         ret = 0
         #ret += self.solveButtonsP2(P2goals[0], test, [0] * len(P2goals[0]))
