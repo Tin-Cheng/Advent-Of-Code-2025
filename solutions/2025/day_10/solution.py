@@ -4,6 +4,7 @@
 
 from ...base import StrSplitSolution, answer
 import heapq
+from z3 import *
 
 class Solution(StrSplitSolution):
     _year = 2025
@@ -41,7 +42,7 @@ class Solution(StrSplitSolution):
                 heapq.heappush(q, (step + 1 , next, nextSeen))
         return -1
 
-    def solveButtonsP2(self, goal, buttonsSet, current, index = 0, step = 0, currentMin = 99999):
+    """ def solveButtonsP2(self, goal, buttonsSet, current, index = 0, step = 0, currentMin = 99999):
         #print('solveButtonsP2', index, step, current)
         goalStr = str.join(',', map(str, goal))
         if index == len(buttonsSet):
@@ -64,7 +65,30 @@ class Solution(StrSplitSolution):
                 return currentMin
             tryNextIndex = self.solveButtonsP2(goal, buttonsSet, next.copy(), index + 1, step + clicks)
             currentMin = min(currentMin, tryNextIndex)
-        return currentMin
+        return currentMin """
+    
+    def solveP2Z3(self, goal, buttonsSet):
+        newButtonsSet = []
+        for buttons in buttonsSet:
+            newButtons = [0] * len(goal)
+            for b in buttons:
+                newButtons[b] = 1
+            newButtonsSet.append(newButtons)
+        B = [ Int(f"b{i}") for i in range(len(newButtonsSet))]
+        o = Optimize()
+        for i in range(len(newButtonsSet)):
+            o.add(B[i] >= 0)
+        for i in range(len(goal)):
+            o.add( Sum([ newButtonsSet[j][i] * B[j] for j in range(len(newButtonsSet))]) == goal[i])
+        o.minimize( Sum(B))
+        o.check()
+        a = o.model()
+        ret = 0
+        for i in a:
+            ret += a[i].as_long()
+        return ret
+
+        
 
     @answer(558)
     def part_1(self) -> int:
@@ -76,15 +100,11 @@ class Solution(StrSplitSolution):
 
     # @answer(1234)
     def part_2(self) -> int:
-        return 0
         (goals, buttonsSets, P2goals) = self.parseInput(self.input)
         ret = 0
         #ret += self.solveButtonsP2(P2goals[0], test, [0] * len(P2goals[0]))
         for i, (goal, buttons) in enumerate(zip(P2goals, buttonsSets)):
-            buttonsSorted = sorted(buttons, key=lambda x: -len(x))
-            print(i, goal, buttonsSorted)
-            r = self.solveButtonsP2(goal, buttonsSorted, [0] * len(goal))
-            print(i,r, goal, buttonsSorted)
+            r = self.solveP2Z3(goal, buttons)
             ret += r
         return ret
 
